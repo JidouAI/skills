@@ -55,10 +55,167 @@ The name should be general, descriptive of the service being integrated, easy to
 
 ### Tool Design
 
+Create tool schemas that minimize MALFORMED_FUNCTION_CALL errors and maximize LLM comprehension.
+
+**Core Principles**:
+- **Explicit types**: Always declare types explicitly—never rely on inference
+- **Required fields**: Use `.optional()` only for truly optional params; required by default
+- **Flatten structures**: Avoid deep nesting; prefer flat parameter lists
+- **Use enums**: Constrain allowed values with `z.enum()` instead of free-form strings
+- **Rich descriptions**: Include purpose, constraints, format, and examples via `.describe()`
+
+**General Guidelines**:
 - Tool descriptions must narrowly and unambiguously describe functionality
 - Descriptions must precisely match actual functionality
 - Provide tool annotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
 - Keep tool operations focused and atomic
+
+#### Parameter Description Template
+
+Every parameter description should include:
+
+```
+[What it is] + [Constraints] + [Format/Example]
+```
+
+Example:
+```typescript
+const schema = z.object({
+  userId: z.string().describe(
+    "Unique user identifier in UUID v4 format. Must be 36 characters. Example: 550e8400-e29b-41d4-a716-446655440000"
+  ),
+});
+```
+
+#### Quick Reference by Type
+
+| Type | Description Pattern |
+|------|---------------------|
+| String ID | "Unique [entity] identifier in [format] format. Example: [value]" |
+| Date | "Date in YYYY-MM-DD format. Example: 2025-01-15" |
+| DateTime | "Timestamp in ISO 8601 format with timezone. Example: 2025-01-15T14:30:00Z" |
+| Email | "Valid email address. Example: user@example.com" |
+| Integer | "[Description]. Must be an integer between [min] and [max]." |
+| Boolean | "[True behavior] vs [false behavior]. Default: [value]." |
+| Array | "List of [type]. [Item constraints]. Min [n], max [m] items. Example: [value]" |
+| Enum | Use `z.enum()`—description explains purpose only |
+
+#### Common Anti-Patterns
+
+Avoid these patterns that cause tool-calling failures:
+
+```typescript
+// ❌ Vague description
+z.object({
+  userId: z.string().describe("User ID"),
+})
+
+// ✅ Specific with format and example
+z.object({
+  userId: z.string().describe(
+    "User identifier in UUID v4 format. Example: 550e8400-e29b-41d4-a716-446655440000"
+  ),
+})
+
+
+// ❌ Missing format specification
+z.object({
+  date: z.string().describe("The date"),
+})
+
+// ✅ Explicit format with example
+z.object({
+  date: z.string().describe("Date in ISO 8601 format (YYYY-MM-DD). Example: 2025-01-15"),
+})
+
+
+// ❌ Implicit constraints
+z.object({
+  pageSize: z.number().describe("Number of items per page"),
+})
+
+// ✅ Explicit bounds
+z.object({
+  pageSize: z.number().int().min(1).max(100).default(20).describe(
+    "Items per page. Range: 1-100."
+  ),
+})
+
+
+// ❌ Free-form when values are constrained
+z.object({
+  status: z.string().describe("The order status"),
+})
+
+// ✅ Use enum
+z.object({
+  status: z.enum(["pending", "confirmed", "shipped", "delivered"]).describe(
+    "Current order status."
+  ),
+})
+```
+
+#### Tool-Level Description
+
+The main tool description should include:
+
+- **What**: Primary purpose
+- **When**: Triggering conditions
+- **Returns**: Output format summary
+- **Side effects**: Any state changes (if applicable)
+
+Example:
+```typescript
+server.tool(
+  "create_calendar_event",
+  `Create a new calendar event and send invitations.
+
+Use when the user wants to schedule meetings, appointments, or block time.
+
+Returns the created event with confirmation details and event ID.
+
+Side effects: Creates event in primary calendar, sends email invitations.`,
+  schema,
+  async (params) => { /* handler */ }
+);
+```
+
+#### Complete Example
+
+```typescript
+import { z } from "zod";
+
+const CreateTaskSchema = z.object({
+  title: z.string()
+    .min(1)
+    .max(200)
+    .describe("Task title. 1-200 characters."),
+
+  description: z.string()
+    .max(2000)
+    .optional()
+    .describe("Task details. Plain text, max 2000 characters."),
+
+  priority: z.enum(["low", "medium", "high", "urgent"])
+    .default("medium")
+    .describe("Task urgency level."),
+
+  dueDate: z.string()
+    .optional()
+    .describe("Due date in YYYY-MM-DD format. Example: 2025-01-15"),
+
+  assigneeId: z.string()
+    .optional()
+    .describe("Assignee user ID in UUID format. Leave empty for unassigned."),
+});
+
+server.tool(
+  "create_task",
+  "Create a new task. Use when adding tasks, to-dos, or action items.",
+  CreateTaskSchema,
+  async (params) => { /* handler */ }
+);
+```
 
 ---
 
