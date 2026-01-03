@@ -1,11 +1,11 @@
 {
-  "name": "anthropic-agent-skills",
+  "name": "jidouai-agent-skills",
   "owner": {
-    "name": "Keith Lazuka",
-    "email": "klazuka@anthropic.com"
+    "name": "Steven Shen",
+    "email": "steven@jidou.ai"
   },
   "metadata": {
-    "description": "Anthropic example skills",
+    "description": "JidouAI Skills modified from Anthropic",
     "version": "1.0.0"
   },
   "plugins": [
@@ -22,8 +22,8 @@
       ]
     },
     {
-      "name": "example-skills",
-      "description": "Collection of example skills demonstrating various capabilities including skill creation, MCP building, visual design, algorithmic art, internal communications, web testing, artifact building, Slack GIFs, and theme styling",
+      "name": "jidouai-skills",
+      "description": "Collection of JidouAI skills demonstrating various capabilities including skill creation, MCP building, visual design, algorithmic art, internal communications, web testing, artifact building, Slack GIFs, and theme styling",
       "source": "./",
       "strict": false,
       "skills": [
