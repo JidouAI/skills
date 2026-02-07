@@ -11,91 +11,56 @@ description: |
 
 Design efficient, complete prompt sets for Metrio AI agents.
 
-## Architecture Overview
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Orchestrator                       │
-│  - Entry point, receives OrchestratorInput          │
-│  - Coordinates sub-agents via YAML                  │
-│  - Returns {status, content} JSON                   │
-└──────────────┬───────────────────────┬──────────────┘
-               │                       │
-    ┌──────────▼──────────┐ ┌─────────▼─────────┐
-    │    Sub-Agent A      │ │   Status Monitor   │
-    │  (domain-specific)  │ │  (error handling)  │
-    └─────────────────────┘ └────────────────────┘
+┌───────────────────────────────────────────────┐
+│               Orchestrator                     │
+│  - Receives system messages + conversation    │
+│  - Coordinates sub-agents via YAML            │
+│  - Returns JSON {status, responseType,        │
+│    content, structContent?, reason?}          │
+└──────────────┬──────────────┬─────────────────┘
+               │              │
+    ┌──────────▼────────┐ ┌──▼────────────────┐
+    │   Sub-Agent(s)    │ │  Status Monitor   │
+    │  (domain tasks)   │ │  (error handling) │
+    └───────────────────┘ └───────────────────┘
 
-┌─────────────────────────────────────────────────────┐
-│               Memory Service                         │
-│  ┌─────────────────┐    ┌─────────────────┐        │
-│  │   Extraction    │ -> │     Merger      │        │
-│  └─────────────────┘    └─────────────────┘        │
-└─────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────┐
+│             Memory Service                     │
+│  Extraction → Merger (async, post-response)   │
+└───────────────────────────────────────────────┘
 ```
 
 ## Workflow
 
 ### 1. Clarify Requirements
 
-Before designing, ask these questions if unclear:
+Before designing, ask if unclear:
 
-**Agent Purpose**
-- What is the agent's primary function?
-- What domain/industry is it for?
-
-**Sub-Agents Needed**
-- What distinct capabilities are required?
-- What MCP tools will each sub-agent use?
-
-**Memory Requirements**
-- What information should be remembered?
-- How should conflicts be resolved?
+- **Agent purpose**: Primary function? Domain/industry?
+- **Sub-agents**: What capabilities? What MCP tools?
+- **Memory**: What to remember? Conflict resolution strategy?
 
 ### 2. Design Prompts
 
-After requirements are clear, design in this order:
+Design in this order, using the reference templates:
 
-1. **Orchestrator** - See [orchestrator-template.md](references/orchestrator-template.md)
-2. **Sub-Agents** - See [sub-agent-template.md](references/sub-agent-template.md)
-3. **Status Monitor** - Always include for error handling
-4. **Memory Extraction** - See [memory-template.md](references/memory-template.md)
-5. **Memory Merger** - Based on extraction categories
+1. **Orchestrator** - [orchestrator-template.md](references/orchestrator-template.md)
+2. **Sub-Agents** - [sub-agent-template.md](references/sub-agent-template.md)
+3. **Status Monitor** - Always include (template in sub-agent-template.md)
+4. **Memory Extraction & Merger** - [memory-template.md](references/memory-template.md)
 
-## Design Principles
+### 3. Deliver
 
-### Prompt Efficiency
-- Be concise - every token costs
-- Use structured formats (YAML for inter-agent, JSON for output)
-- Avoid redundant instructions
-
-### Context Completeness
-- Orchestrator must pass ALL needed context to sub-agents
-- Sub-agents are stateless - assume no prior knowledge
-- Include relevant IDs, user info, and task specifics
-
-### Error Resilience
-- Always include status-monitor
-- Define recoverable vs non-recoverable errors
-- Set reasonable retry limits (typically 3)
-
-### Memory Design
-- Extract only actionable information
-- Define clear merge strategies
-- Protect critical fields from accidental overwrite
-
-## Output Format
-
-Deliver prompts as separate markdown code blocks:
+Output each prompt as a separate markdown section:
 
 ```markdown
 ## Orchestrator Prompt
 [prompt content]
 
 ## Sub-Agent: [name]
-[prompt content]
-
-## Status Monitor
 [prompt content]
 
 ## Memory Extraction
@@ -105,43 +70,38 @@ Deliver prompts as separate markdown code blocks:
 [prompt content]
 ```
 
+## Design Principles
+
+- **Orchestrator gets context automatically**: User metadata, memory context, and conversation history are injected as system messages by the backend. Don't redefine input formats — instruct the orchestrator how to use them.
+- **Sub-agents are stateless**: Pass ALL needed context via YAML. They know nothing about prior conversation.
+- **JSON-only output**: Orchestrator must return pure JSON, no markdown or extra text.
+- **Memory extracts only actionable info**: Define clear memoryTypes and merge strategies per domain.
+
 ## Quick Reference
 
-### Orchestrator Input/Output
+### Orchestrator Output (JSON only)
 
-```typescript
-// Input
-interface OrchestratorInput {
-  userId: string;
-  userMessage: string;
-  context?: Record<string, any>;
+```json
+{
+  "status": "completed | failed",
+  "responseType": "text | struct",
+  "content": "string (required)",
+  "structContent": {},
+  "reason": "string (only when failed)"
 }
-
-// Output
-{ "status": "completed" | "failed", "content": "回覆訊息" }
 ```
 
 ### Sub-Agent Communication (YAML)
 
 ```yaml
-# Orchestrator -> Sub-Agent
+# Orchestrator → Sub-Agent
 task: task_type
 data:
   field1: value1
-  context: "necessary context"
 
-# Sub-Agent -> Orchestrator
+# Sub-Agent → Orchestrator
 status: success | failed
 result: { ... }
 error: "if failed"
 recoverable: true | false
-```
-
-### Status Monitor Decision
-
-```yaml
-decision: retry | abort | alternative
-reason: "決策原因"
-suggestion: "替代方案"
-message_to_user: "若停止，給使用者的訊息"
 ```
